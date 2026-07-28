@@ -25,6 +25,7 @@ func main() {
     })
 
     wrapped := middlewarepkg.New(handler, "Idempotency-Key")
+    defer wrapped.Close()
 
     req1 := httptest.NewRequest(http.MethodPost, "/increment", nil)
     req1.Header.Set("Idempotency-Key", "abc")

@@ -1,6 +1,8 @@
 package store
 
 import (
+    "sync"
+    "sync/atomic"
     "testing"
     "time"
 )
@@ -70,5 +72,33 @@ func TestStoreCleanupRemovesExpiredEntries(t *testing.T) {
 
     if len(s.entries) != 0 {
         t.Fatalf("expected cleanup to remove all expired entries, got %d", len(s.entries))
+    }
+}
+
+func TestStoreGetOrSetCreatesOnlyOncePerKey(t *testing.T) {
+    s := New()
+
+    var created int32
+    var wg sync.WaitGroup
+
+    for i := 0; i < 20; i++ {
+        wg.Add(1)
+        go func() {
+            defer wg.Done()
+
+            _, _, err := s.GetOrSet("abc", func() *Entry {
+                atomic.AddInt32(&created, 1)
+                return &Entry{Key: "abc", Value: "value"}
+            })
+            if err != nil {
+                t.Errorf("GetOrSet returned error: %v", err)
+            }
+        }()
+    }
+
+    wg.Wait()
+
+    if atomic.LoadInt32(&created) != 1 {
+        t.Fatalf("expected one creation for the key, got %d", atomic.LoadInt32(&created))
     }
 }

@@ -116,6 +116,40 @@ func (s *Store) Get(key string) (*Entry, bool) {
     return entry, true
 }
 
+// GetOrSet returns an existing entry for the key if present, otherwise it creates
+// one atomically under the store lock.
+func (s *Store) GetOrSet(key string, create func() *Entry) (*Entry, bool, error) {
+    if key == "" {
+        return nil, false, errors.New("store: key is empty")
+    }
+    if create == nil {
+        return nil, false, errors.New("store: create is nil")
+    }
+
+    s.mu.Lock()
+    defer s.mu.Unlock()
+
+    if entry, ok := s.entries[key]; ok {
+        if s.isExpiredLocked(entry) {
+            delete(s.entries, key)
+        } else {
+            return entry, false, nil
+        }
+    }
+
+    entry := create()
+    if entry == nil {
+        return nil, false, errors.New("store: entry is nil")
+    }
+    if entry.Key == "" {
+        entry.Key = key
+    }
+
+    entry.CreatedAt = time.Now()
+    s.entries[key] = entry
+    return entry, true, nil
+}
+
 // Delete removes an entry by key.
 func (s *Store) Delete(key string) error {
     if key == "" {

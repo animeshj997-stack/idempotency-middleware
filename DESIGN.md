@@ -18,11 +18,11 @@ Why rejected: the brief explicitly calls for a single-node, in-memory implementa
 
 ## 3. Synchronization primitive
 
-Chosen solution: a mutex-protected map plus a per-entry completion channel. The first request creates an entry and later requests wait on that channel until the first execution finishes.
+Chosen solution: let the store own synchronization with its internal RWMutex, while each entry uses a completion channel to coordinate duplicate requests. The first request creates an entry and later requests wait on that channel until the first execution finishes.
 
-Rejected alternative: busy-waiting with polling.
+Rejected alternative: a global middleware mutex plus a per-entry completion channel.
 
-Why rejected: polling wastes CPU and makes the design less predictable. A channel-based wait is simpler and avoids unnecessary contention.
+Why rejected: a middleware-level mutex would serialize unrelated keys and become a bottleneck. The store already provides the necessary concurrency control for map access, and the per-entry channel is enough to coordinate waiters for the same logical operation.
 
 ## 4. Request fingerprint design
 
@@ -64,4 +64,4 @@ Rejected alternative: introducing Redis-backed coordination immediately.
 
 Why rejected: distributed systems add new failure modes, locking concerns, and operational complexity that are not needed for the assignment. The important step is to nail the single-node semantics first.
 
-If the system were extended to multiple nodes, the design would need a shared backing store, distributed locking or consensus, and a strategy for cross-node replay. In practice, that would mean replacing the local in-memory store with a strongly consistent distributed store and handling persistence, failover, replication, and recovery explicitly. That would be a different system design problem, and the trade-offs would be much more significant than this simple middleware layer.
+If the system were extended to multiple nodes, the design would need a shared backing store with distributed coordination primitives such as SETNX, EXPIRE, and Lua scripts for atomic compare-and-set semantics, along with a strategy for cross-node replay. In practice, that would mean replacing the local in-memory store with a strongly consistent distributed store and handling persistence, failover, replication, and recovery explicitly. That would be a different system design problem, and the trade-offs would be much more significant than this simple middleware layer.
